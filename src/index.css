@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  /* Ledger palette */
+  --color-paper: #e7e1cf;
+  --color-paper-dim: #ddd5bd;
+  --color-ink: #1e211c;
+  --color-ink-soft: #4a4a41;
+  --color-rule: #364a63;
+  --color-rule-soft: #5c7086;
+  --color-stamp: #a13327;
+  --color-stamp-soft: #c65b4c;
+  --color-brass: #7a6a45;
+  --color-slot: #17150f;
+
+  --font-display: "Special Elite", "Courier New", monospace;
+  --font-body: "IBM Plex Sans Thai", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --animate-sweep: sweep 1.8s ease-in-out infinite;
+  --animate-rise: rise 0.4s ease-out backwards;
+}
+
+@keyframes sweep {
+  0% { transform: translateY(-4%); opacity: 0.2; }
+  50% { opacity: 0.85; }
+  100% { transform: translateY(104%); opacity: 0.2; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+html {
+  background: var(--color-paper);
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+/* faint ledger rule lines as a background texture */
+.ledger-lines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 35px,
+    color-mix(in srgb, var(--color-rule) 22%, transparent) 36px
+  );
+}
+
+.paper-grain {
+  background-image:
+    radial-gradient(color-mix(in srgb, var(--color-ink) 4%, transparent) 1px, transparent 1px);
+  background-size: 3px 3px;
+}

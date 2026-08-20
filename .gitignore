@@ -1,0 +1,63 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Environment variables ---
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+server/.env
+server/.env.local
+server/.env.*.local
+
+# --- แต่ยังอยาก commit ตัวอย่างไว้ ---
+!.env.example
+!server/.env.example
+
+# --- Dependencies ---
+node_modules/
+server/node_modules/
+
+# --- Build output ---
+dist/
+build/
+server/dist/
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Editor / OS ---
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# --- TypeScript build info ---
+*.tsbuildinfo
