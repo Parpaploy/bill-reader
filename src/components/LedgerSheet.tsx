@@ -31,7 +31,49 @@ export default function LedgerSheet({
   const totalRow = rows.find((r) => r.isTotal && r.amount);
 
   function updateRow(id: string, patch: Partial<LedgerRow>) {
-    onRowsChange(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    const touchedQtyOrPrice = "quantity" in patch || "unitPrice" in patch;
+
+    const updated = rows.map((r) => {
+      if (r.id !== id) return r;
+
+      const merged: LedgerRow = { ...r, ...patch };
+
+      if (touchedQtyOrPrice && !merged.isTotal) {
+        const qty = parseFloat(merged.quantity ?? "");
+        const price = parseFloat(merged.unitPrice ?? "");
+
+        if (!Number.isNaN(qty) && !Number.isNaN(price)) {
+          const computed = Math.round(qty * price * 100) / 100;
+          merged.amount = String(computed);
+          merged.mathMismatch = false;
+        } else {
+          merged.mathMismatch = false;
+        }
+      } else if ("amount" in patch && !merged.isTotal) {
+        const qty = parseFloat(merged.quantity ?? "");
+        const price = parseFloat(merged.unitPrice ?? "");
+        const amt = parseFloat(merged.amount ?? "");
+        if (!Number.isNaN(qty) && !Number.isNaN(price) && !Number.isNaN(amt)) {
+          const expected = Math.round(qty * price * 100) / 100;
+          merged.mathMismatch = Math.abs(expected - amt) > 0.005;
+        } else {
+          merged.mathMismatch = false;
+        }
+      }
+
+      return merged;
+    });
+
+    const sum = updated
+      .filter((r) => !r.isTotal)
+      .reduce((acc, r) => acc + (parseFloat(r.amount ?? "") || 0), 0);
+    const roundedSum = Math.round(sum * 100) / 100;
+
+    const withTotal = updated.map((r) =>
+      r.isTotal ? { ...r, amount: String(roundedSum) } : r,
+    );
+
+    onRowsChange(withTotal);
   }
 
   function removeRow(id: string) {
