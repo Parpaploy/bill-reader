@@ -7,6 +7,8 @@ import type { Request, Response } from "express";
 const MODEL = "gemini-3.5-flash-lite";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
+const MAX_RETRIES = 2;
+
 const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยอ่านบิล/ใบเสร็จลายมือภาษาไทยที่ถ่ายมาจากกล้อง
 งานของคุณคือ "อ่านและตีความ" บิลเหมือนคนที่คุ้นเคยกับบิลเงินสดร้านค้าไทยทั่วไป
 (มีคอลัมน์ รายการ, จำนวน, ราคาต่อหน่วย (หน่วยละ), จำนวนเงิน, รวมเงิน)
@@ -15,26 +17,36 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยอ่านบ
 กติกาสำหรับรายการในตาราง:
 1. "label" ให้เก็บข้อความภาษาไทยตามที่อ่านได้จากบรรทัดนั้น ไม่ต้องแปลเป็นอังกฤษ
 2. "amount" คือจำนวนเงินท้ายบรรทัดนั้น (ตัวเลขล้วน ไม่มีคอมมา ไม่มีหน่วย) ถ้าไม่มีเลขในบรรทัดนั้นให้เป็น null
-3. "unitPrice" คือตัวเลขในคอลัมน์ "หน่วยละ"/"ราคาต่อหน่วย" ของบรรทัดนั้น (ตัวเลขล้วน) ถ้าบิลไม่มีคอลัมน์นี้หรืออ่านไม่ออกให้เป็น null
-4. ถ้าลายมือไม่ชัดจนไม่มั่นใจ ให้เดาที่สมเหตุสมผลที่สุดแล้วใส่ confidence เป็น "low"
+3. "quantity" คือตัวเลขในคอลัมน์ "จำนวน" (จำนวนชิ้น/ปริมาณสินค้า ไม่ใช่จำนวนเงิน) ของบรรทัดนั้น (ตัวเลขล้วน) ถ้าบิลไม่มีคอลัมน์นี้หรืออ่านไม่ออกให้เป็น null
+4. "unitPrice" คือตัวเลขในคอลัมน์ "หน่วยละ"/"ราคาต่อหน่วย" ของบรรทัดนั้น (ตัวเลขล้วน) ถ้าบิลไม่มีคอลัมน์นี้หรืออ่านไม่ออกให้เป็น null
+5. ถ้าลายมือไม่ชัดจนไม่มั่นใจ ให้เดาที่สมเหตุสมผลที่สุดแล้วใส่ confidence เป็น "low"
    ถ้ามั่นใจว่าอ่านถูกให้ใส่ confidence เป็น "high"
-5. อย่าใส่บรรทัดหัวตาราง/label ของฟอร์มพิมพ์ (เช่น "รายการ", "จำนวนเงิน", "ลำดับ") เป็น item — เอาเฉพาะรายการที่มีลายมือเขียนจริง
-6. "total" คือยอดรวมท้ายบิล ถ้าไม่เห็นให้เป็น null
+6. อย่าใส่บรรทัดหัวตาราง/label ของฟอร์มพิมพ์ (เช่น "รายการ", "จำนวนเงิน", "ลำดับ") เป็น item — เอาเฉพาะรายการที่มีลายมือเขียนจริง
+7. "total" คือยอดรวมท้ายบิล ถ้าไม่เห็นให้เป็น null
 
 กติกาสำหรับหัวบิลและผู้รับเงิน (สำคัญ: บิลจริงมักกรอกไม่ครบทุกช่อง อย่าเดาช่องที่ไม่มีในภาพเด็ดขาด ให้ใส่ null แทนการเดา):
-7. "header.shopName" คือชื่อร้าน/ชื่อกิจการเท่านั้น มักอยู่ในกล่องมุมบนซ้ายเหนือคำว่า "CASH SALE"/"บิลเงินสด"/"ใบเสร็จรับเงิน" หรือเป็นข้อความพิมพ์สำเร็จ (มักมีที่อยู่/เบอร์โทรกำกับ)
+8. "header.shopName" คือชื่อร้าน/ชื่อกิจการเท่านั้น มักอยู่ในกล่องมุมบนซ้ายเหนือคำว่า "CASH SALE"/"บิลเงินสด"/"ใบเสร็จรับเงิน" หรือเป็นข้อความพิมพ์สำเร็จ (มักมีที่อยู่/เบอร์โทรกำกับ)
     - บิลเงินสดจำนวนมากช่องนี้เป็นกล่องเทาว่างเปล่า ไม่มีอะไรเขียนเลย → ให้เป็น null อย่าฝืนหาชื่อร้าน
     - ห้ามสับสนกับช่อง "นาม/CUSTOMER" (ช่องลูกค้า) เด็ดขาด — บางบิลช่องลูกค้ากลับถูกเขียนด้วยข้อมูลอื่น เช่น ทะเบียนรถ รุ่นรถ หรือเลขอ้างอิง ซึ่งไม่ใช่ชื่อร้านและไม่ใช่ผู้รับเงิน ไม่ต้องเก็บข้อมูลจากช่องนี้เป็น shopName
-8. "header.date" คือวันที่บนบิล ให้ถอดตามที่อ่านได้ตรง ๆ ทั้งตัวเลขและตัวคั่น (เช่น "31/8/67", "9-2-67", "1 ก.พ. 69") อย่าแปลงรูปแบบหรือคำนวณปี ค.ศ./พ.ศ. เอง ถ้าไม่มีหรืออ่านไม่ออกให้เป็น null
-9. "header.bookNumber" คือเล่มที่ (ช่อง "เล่มที่"/"BOOK NO.") กับ "header.billNumber" คือเลขที่บิล (ช่อง "เลขที่"/"BILL NO.") เป็นคนละช่องกัน อยู่ติดกันมุมบนขวาของบิลเสมอ ในบิลเงินสดที่เขียนมือทั้งสองช่องนี้มักว่างเปล่าเป็นเรื่องปกติมาก — ไม่ใช่ความผิดพลาด ให้เป็น null ตามจริง อย่าเดาเลขใดๆ ขึ้นมาเอง
-10. "payee" คือชื่อ/ชื่อย่อผู้รับเงินตรงท้ายบิล (บรรทัด "ผู้รับเงิน"/"COLLECTOR") มีสองกรณีที่ต้องแยกให้ออก:
+9. "header.date" คือวันที่บนบิล ให้ถอดตามที่อ่านได้ตรง ๆ ทั้งตัวเลขและตัวคั่น (เช่น "31/8/67", "9-2-67", "1 ก.พ. 69") อย่าแปลงรูปแบบหรือคำนวณปี ค.ศ./พ.ศ. เอง ถ้าไม่มีหรืออ่านไม่ออกให้เป็น null
+10. "header.bookNumber" คือเล่มที่ (ช่อง "เล่มที่"/"BOOK NO.") กับ "header.billNumber" คือเลขที่บิล (ช่อง "เลขที่"/"BILL NO.") เป็นคนละช่องกัน อยู่ติดกันมุมบนขวาของบิลเสมอ ในบิลเงินสดที่เขียนมือทั้งสองช่องนี้มักว่างเปล่าเป็นเรื่องปกติมาก — ไม่ใช่ความผิดพลาด ให้เป็น null ตามจริง อย่าเดาเลขใดๆ ขึ้นมาเอง
+11. "payee" คือชื่อ/ชื่อย่อผู้รับเงินตรงท้ายบิล (บรรทัด "ผู้รับเงิน"/"COLLECTOR") มีสองกรณีที่ต้องแยกให้ออก:
     - ถ้าเป็นลายเซ็นหวัดๆ ที่ไม่มีตัวอักษรให้อ่านได้เลย (แค่เส้นขีดเขียน) → null
     - ถ้าพอแยกแยะเป็นตัวอักษร/ชื่อย่อ/ฉายาได้บ้าง (แม้จะไม่ใช่ชื่อเต็มทางการ) → ถอดตามที่อ่านได้ และถ้าไม่มั่นใจว่าอ่านถูกให้ถอดแบบที่ใกล้เคียงที่สุด
     - อย่าใส่คำว่า "ผู้รับเงิน" หรือ "COLLECTOR" เฉยๆ (นั่นเป็น label ของฟอร์ม ไม่ใช่ชื่อคน)
-11. "header.shopAddress" คือที่อยู่ร้าน มักพิมพ์อยู่ใต้ชื่อร้านในกล่องหัวบิล (อาจรวมเบอร์โทรที่อยู่ติดกันได้ถ้าอยู่บรรทัดเดียวกัน) บิลเงินสดที่เขียนมือส่วนใหญ่ไม่มีช่องนี้เลย → null
-12. "header.commLicense" คือเลขทะเบียนการค้า (ช่อง "ทะเบียนการค้า"/"CommLicense"/"商標編號") ไม่ใช่ทะเบียนรถ ถ้าไม่มีตัวเลขกรอกในช่องนี้ให้เป็น null
-13. "header.taxId" คือเลขประจำตัวผู้เสียภาษี (ช่อง "เลขประจำตัวผู้เสียภาษี"/"TAX IDENTIFICATION NO.") มักเป็นตัวเลข 13 หลักแบ่งเป็นช่องสี่เหลี่ยม ถ้าช่องว่างเปล่าไม่มีตัวเลขให้เป็น null
-14. "header.idNumber" คือเลขประจำตัวประชาชน (ช่อง "เลขประจำตัวประชาชน"/"IDENTIFICATION NO.") แยกคนละช่องกับเลขผู้เสียภาษีแม้จะรูปแบบคล้ายกัน ให้ดูจาก label กำกับช่องนั้นๆ ถ้าว่างเปล่าให้เป็น null`;
+12. "header.shopAddress" คือที่อยู่ร้าน มักพิมพ์อยู่ใต้ชื่อร้านในกล่องหัวบิล (อาจรวมเบอร์โทรที่อยู่ติดกันได้ถ้าอยู่บรรทัดเดียวกัน) บิลเงินสดที่เขียนมือส่วนใหญ่ไม่มีช่องนี้เลย → null
+13. "header.commLicense" คือเลขทะเบียนการค้า (ช่อง "ทะเบียนการค้า"/"CommLicense"/"商標編號") ไม่ใช่ทะเบียนรถ ถ้าไม่มีตัวเลขกรอกในช่องนี้ให้เป็น null
+14. "header.taxId" คือเลขประจำตัวผู้เสียภาษี (ช่อง "เลขประจำตัวผู้เสียภาษี"/"TAX IDENTIFICATION NO.") มักเป็นตัวเลข 13 หลักแบ่งเป็นช่องสี่เหลี่ยม ถ้าช่องว่างเปล่าไม่มีตัวเลขให้เป็น null
+15. "header.idNumber" คือเลขประจำตัวประชาชน (ช่อง "เลขประจำตัวประชาชน"/"IDENTIFICATION NO.") แยกคนละช่องกับเลขผู้เสียภาษีแม้จะรูปแบบคล้ายกัน ให้ดูจาก label กำกับช่องนั้นๆ ถ้าว่างเปล่าให้เป็น null
+
+กติกาการตรวจทานตัวเอง (สำคัญมาก — ทำก่อนตอบเสมอ):
+16. สำหรับแต่ละรายการที่มีทั้ง quantity, unitPrice และ amount ครบ ให้เช็คในใจว่า quantity × unitPrice ควรใกล้เคียงกับ amount ของบรรทัดนั้น
+    - ถ้าคูณแล้วไม่ตรง ให้ทบทวนตัวเลข 3 ค่านี้อีกครั้งว่ามีตัวไหนอ่านผิดได้บ้าง (เช่น เลข 1/7, 3/8, 0/6 ที่เขียนคล้ายกัน)
+    - ถ้าทบทวนแล้วยังหาสาเหตุไม่ได้ ให้ลดระดับ confidence ของรายการนั้นเป็น "low"
+17. ก่อนสรุปผล ให้บวกเลข "amount" ของทุกรายการในใจแล้วเทียบกับ "total" ที่อ่านได้จากบิล
+    - ถ้าผลรวมไม่ตรงกับ total ให้ทบทวนรายการที่ตัวเลขอ่านยากอีกครั้งว่ามีจุดไหนอ่านผิดได้บ้าง
+    - ถ้าทบทวนแล้วยังหาสาเหตุความต่างไม่ได้ ให้ลดระดับ confidence ของรายการที่ตัวเลขไม่มั่นใจที่สุดลงเป็น "low" แทนที่จะปล่อยเป็น "high" ทั้งหมด
+    - ห้ามแก้ "total" ให้ตรงกับผลรวมที่คำนวณเอง — ให้ใส่ total ตามที่อ่านได้จากบิลจริงเสมอ`;
 
 const RESPONSE_SCHEMA = {
   type: "object",
@@ -69,10 +81,11 @@ const RESPONSE_SCHEMA = {
         properties: {
           label: { type: "string" },
           amount: { type: "number", nullable: true },
+          quantity: { type: "number", nullable: true },
           unitPrice: { type: "number", nullable: true },
           confidence: { type: "string", enum: ["high", "low"] },
         },
-        required: ["label", "amount", "unitPrice", "confidence"],
+        required: ["label", "amount", "quantity", "unitPrice", "confidence"],
       },
     },
     total: { type: "number", nullable: true },
@@ -84,6 +97,7 @@ const RESPONSE_SCHEMA = {
 interface GeminiBillItem {
   label: string;
   amount: number | null;
+  quantity: number | null;
   unitPrice: number | null;
   confidence: "high" | "low";
 }
@@ -106,6 +120,92 @@ interface GeminiBillResult {
   payee: string | null;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGeminiWithRetry(
+  body: unknown,
+  apiKey: string,
+): Promise<Response extends never ? never : globalThis.Response> {
+  let lastError: { status: number; text: string } | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(GEMINI_API_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) return response;
+
+    if (response.status < 500) return response;
+
+    lastError = { status: response.status, text: await response.text() };
+    if (attempt < MAX_RETRIES) {
+      await sleep(500 * 2 ** attempt);
+    }
+  }
+
+  throw new Error(
+    `Gemini API ล้มเหลวหลังลองใหม่ ${MAX_RETRIES} ครั้ง: ${lastError?.status} ${lastError?.text}`,
+  );
+}
+
+function verifyRowMath(items: GeminiBillItem[]): {
+  items: GeminiBillItem[];
+  mathMismatch: boolean[];
+} {
+  const mathMismatch = items.map((item) => {
+    if (
+      item.quantity == null ||
+      item.unitPrice == null ||
+      item.amount == null
+    ) {
+      return false;
+    }
+    const expected = item.quantity * item.unitPrice;
+    return Math.abs(expected - item.amount) > 0.5;
+  });
+
+  const adjusted = items.map((item, i) =>
+    mathMismatch[i] && item.confidence === "high"
+      ? { ...item, confidence: "low" as const }
+      : item,
+  );
+
+  return { items: adjusted, mathMismatch };
+}
+
+function verifyTotalAndAdjustConfidence(
+  items: GeminiBillItem[],
+  total: number | null,
+): { items: GeminiBillItem[]; totalMismatch: boolean } {
+  if (total == null || items.length === 0) {
+    return { items, totalMismatch: false };
+  }
+
+  const sum = items.reduce((acc, item) => acc + (item.amount ?? 0), 0);
+  const mismatch = Math.abs(sum - total) > 0.5;
+
+  if (!mismatch) return { items, totalMismatch: false };
+
+  const allHigh = items.every((item) => item.confidence === "high");
+  if (allHigh) {
+    const adjusted = [...items];
+    adjusted[adjusted.length - 1] = {
+      ...adjusted[adjusted.length - 1],
+      confidence: "low",
+    };
+    return { items: adjusted, totalMismatch: true };
+  }
+
+  return { items, totalMismatch: true };
+}
+
 export async function handleOcrRequest(req: Request, res: Response) {
   try {
     const { imageBase64, mediaType } = req.body as {
@@ -124,13 +224,8 @@ export async function handleOcrRequest(req: Request, res: Response) {
         .json({ error: "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า GEMINI_API_KEY" });
     }
 
-    const response = await fetch(GEMINI_API_URL, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
+    const response = await callGeminiWithRetry(
+      {
         contents: [
           {
             parts: [
@@ -149,9 +244,12 @@ export async function handleOcrRequest(req: Request, res: Response) {
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
+
+          maxOutputTokens: 8192,
         },
-      }),
-    });
+      },
+      apiKey,
+    );
 
     if (!response.ok) {
       const errBody = await response.text();
@@ -178,23 +276,33 @@ export async function handleOcrRequest(req: Request, res: Response) {
         .json({ error: "อ่านผลลัพธ์จาก Gemini ไม่สำเร็จ ลองสแกนใหม่อีกครั้ง" });
     }
 
-    const rows = (parsed.items ?? []).map((item, index) => ({
+    const { items: mathCheckedItems, mathMismatch } = verifyRowMath(
+      parsed.items ?? [],
+    );
+    const { items: verifiedItems, totalMismatch } =
+      verifyTotalAndAdjustConfidence(mathCheckedItems, parsed.total);
+
+    const rows = verifiedItems.map((item, index) => ({
       id: `${index}-${item.label.slice(0, 8)}`,
       label: item.label,
+      quantity: item.quantity != null ? String(item.quantity) : null,
       amount: item.amount != null ? String(item.amount) : null,
       unitPrice: item.unitPrice != null ? String(item.unitPrice) : null,
       isTotal: false,
       confidence: item.confidence ?? "high",
+      mathMismatch: mathMismatch[index] ?? false,
     }));
 
     if (parsed.total != null) {
       rows.push({
         id: `total-${rows.length}`,
         label: "รวมเงิน",
+        quantity: null,
         amount: String(parsed.total),
         unitPrice: null,
         isTotal: true,
         confidence: "high" as const,
+        mathMismatch: false,
       });
     }
 
@@ -210,7 +318,7 @@ export async function handleOcrRequest(req: Request, res: Response) {
     };
     const payee = parsed.payee ?? null;
 
-    return res.json({ rows, rawText, header, payee });
+    return res.json({ rows, rawText, header, payee, totalMismatch });
   } catch (err) {
     console.error("OCR handler error:", err);
     return res.status(500).json({ error: "เกิดข้อผิดพลาดที่ไม่คาดคิด" });

@@ -1,10 +1,13 @@
 export interface LedgerRow {
   id: string;
   label: string;
+  quantity: string | null;
   amount: string | null;
   unitPrice: string | null;
   isTotal: boolean;
   confidence?: "high" | "low";
+
+  mathMismatch?: boolean;
 }
 
 export interface BillHeader {
@@ -23,6 +26,7 @@ export interface OcrResponse {
   rawText: string;
   header?: BillHeader | null;
   payee?: string | null;
+  totalMismatch?: boolean;
 }
 
 export type ScanStatus = "idle" | "scanning" | "done" | "error";

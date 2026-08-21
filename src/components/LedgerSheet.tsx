@@ -190,6 +190,20 @@ export default function LedgerSheet({
                  focus:outline-none focus:border-rule"
                       />
                       <input
+                        value={row.quantity ?? ""}
+                        onChange={(e) =>
+                          updateRow(row.id, {
+                            quantity: e.target.value.replace(/[^\d.]/g, ""),
+                          })
+                        }
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && setEditingId(null)
+                        }
+                        placeholder="จำนวน"
+                        className="font-mono text-xs bg-paper border border-rule/40 rounded-sm px-2 py-1 w-16 text-right
+                 text-ink-soft/70 focus:outline-none focus:border-rule"
+                      />
+                      <input
                         value={row.unitPrice ?? ""}
                         onChange={(e) =>
                           updateRow(row.id, {
@@ -242,11 +256,23 @@ export default function LedgerSheet({
                       {!row.isTotal && (
                         <button
                           onClick={() => setEditingId(row.id)}
-                          className="font-mono text-xs text-ink-soft/50 whitespace-nowrap tabular-nums rounded-sm px-1 -mx-1
-                   hover:bg-rule/10 transition-colors"
+                          title={
+                            row.mathMismatch
+                              ? "จำนวน × หน่วยละ ไม่เท่ากับจำนวนเงิน โปรดตรวจสอบ"
+                              : undefined
+                          }
+                          className={[
+                            "font-mono text-xs whitespace-nowrap tabular-nums rounded-sm px-1 -mx-1",
+                            "hover:bg-rule/10 transition-colors",
+                            row.mathMismatch
+                              ? "text-stamp"
+                              : "text-ink-soft/50",
+                          ].join(" ")}
                         >
+                          {row.mathMismatch && "⚠ "}
+                          {row.quantity ? `${row.quantity} × ` : ""}
                           {row.unitPrice
-                            ? `@${formatAmount(row.unitPrice)}`
+                            ? formatAmount(row.unitPrice)
                             : "@ หน่วยละ"}
                         </button>
                       )}

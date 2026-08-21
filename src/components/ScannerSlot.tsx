@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { ScanStatus } from "../lib/types";
+import CameraCapture from "./camera-capture";
 
 export default function ScannerSlot({
   imagePreview,
@@ -15,6 +16,7 @@ export default function ScannerSlot({
   onReset: () => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback(
@@ -80,6 +82,25 @@ export default function ScannerSlot({
             <p className="font-mono text-[11px] text-paper-dim/50 mt-3">
               JPG · PNG · WEBP
             </p>
+
+            <div className="mt-5">
+              <span className="font-mono text-[11px] text-paper-dim/50">
+                — หรือ —
+              </span>
+            </div>
+
+            <button
+              onClick={(e) => {
+                // กัน event ไปโดน onClick ของ dropzone ที่เปิด file picker
+                e.stopPropagation();
+                setShowCamera(true);
+              }}
+              className="mt-3 font-display text-xs tracking-wide text-paper bg-rule px-4 py-2 rounded-sm
+                         hover:bg-rule-soft transition-colors
+                         focus-visible:outline-2 focus-visible:outline-stamp focus-visible:outline-offset-2"
+            >
+              ถ่ายรูปด้วยกล้อง
+            </button>
           </div>
         )}
 
@@ -124,6 +145,16 @@ export default function ScannerSlot({
             เปลี่ยนรูป
           </button>
         </div>
+      )}
+
+      {showCamera && (
+        <CameraCapture
+          onCapture={(file) => {
+            setShowCamera(false);
+            onFileSelected(file);
+          }}
+          onClose={() => setShowCamera(false)}
+        />
       )}
     </div>
   );
