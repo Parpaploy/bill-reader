@@ -1,14 +1,17 @@
 import { useState } from "react";
 import ScannerSlot from "./components/ScannerSlot";
 import LedgerSheet from "./components/LedgerSheet";
-import { fileToBase64, stripDataUrlPrefix } from "./lib/fileToBase64";
+import {
+  fileToBase64,
+  getMediaTypeFromDataUrl,
+  stripDataUrlPrefix,
+} from "./lib/fileToBase64";
 import type {
   BillHeader,
   LedgerRow,
   OcrResponse,
   ScanStatus,
 } from "./lib/types";
-import { getMediaTypeFromDataUrl } from "../lib/fileToBase64";
 
 export default function App() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
