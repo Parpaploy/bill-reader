@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { LedgerRow, ScanStatus } from "../lib/types";
+import type { BillHeader, LedgerRow, ScanStatus } from "../lib/types";
 import { formatAmount } from "../lib/parseBill";
 
 export default function LedgerSheet({
@@ -8,15 +8,26 @@ export default function LedgerSheet({
   onRowsChange,
   fullText,
   errorMessage,
+  header,
+  payee,
+  onHeaderChange,
+  onPayeeChange,
 }: {
   status: ScanStatus;
   rows: LedgerRow[];
   onRowsChange: (rows: LedgerRow[]) => void;
   fullText: string;
   errorMessage: string | null;
+  header: BillHeader | null;
+  payee: string | null;
+  onHeaderChange: (header: BillHeader) => void;
+  onPayeeChange: (payee: string | null) => void;
 }) {
   const [showRaw, setShowRaw] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingHeaderField, setEditingHeaderField] = useState<
+    keyof BillHeader | "payee" | null
+  >(null);
   const totalRow = rows.find((r) => r.isTotal && r.amount);
 
   function updateRow(id: string, patch: Partial<LedgerRow>) {
@@ -26,6 +37,39 @@ export default function LedgerSheet({
   function removeRow(id: string) {
     onRowsChange(rows.filter((r) => r.id !== id));
   }
+
+  function updateHeaderField(field: keyof BillHeader, value: string) {
+    const base: BillHeader = header ?? {
+      shopName: null,
+      shopAddress: null,
+      date: null,
+      bookNumber: null,
+      billNumber: null,
+      commLicense: null,
+      taxId: null,
+      idNumber: null,
+    };
+    onHeaderChange({ ...base, [field]: value === "" ? null : value });
+  }
+
+  function handleRowBlur(e: React.FocusEvent<HTMLDivElement>) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setEditingId(null);
+    }
+  }
+
+  const headerFields: { key: keyof BillHeader; label: string }[] = [
+    { key: "shopName", label: "ชื่อร้าน" },
+    { key: "date", label: "วันที่" },
+    { key: "bookNumber", label: "เล่มที่" },
+    { key: "billNumber", label: "เลขที่" },
+    { key: "shopAddress", label: "ที่อยู่ร้าน" },
+    { key: "commLicense", label: "ทะเบียนการค้า" },
+    { key: "taxId", label: "เลขผู้เสียภาษี" },
+    { key: "idNumber", label: "เลขประชาชน" },
+  ];
+
+  const hasHeaderData = status === "done" && (!!header || payee !== undefined);
 
   return (
     <div className="flex flex-col gap-4 h-full">
@@ -48,6 +92,39 @@ export default function LedgerSheet({
           </button>
         )}
       </div>
+
+      {status === "done" && !showRaw && hasHeaderData && (
+        <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs text-ink-soft/70 border-b border-rule/15 pb-3">
+          {headerFields.map(({ key, label }) => (
+            <div key={key} className="flex items-baseline gap-1">
+              <span className="text-ink-soft/40">{label}:</span>
+              {editingHeaderField === key ? (
+                <input
+                  autoFocus
+                  value={header?.[key] ?? ""}
+                  onChange={(e) => updateHeaderField(key, e.target.value)}
+                  onBlur={() => setEditingHeaderField(null)}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && setEditingHeaderField(null)
+                  }
+                  className="bg-paper border border-rule/40 rounded-sm px-1.5 py-0.5 text-ink
+                             focus:outline-none focus:border-rule w-32"
+                />
+              ) : (
+                <button
+                  onClick={() => setEditingHeaderField(key)}
+                  className={[
+                    "rounded-sm px-1 -mx-1 hover:bg-rule/10 transition-colors",
+                    header?.[key] ? "text-ink" : "italic text-ink-soft/40",
+                  ].join(" ")}
+                >
+                  {header?.[key] || "ไม่ได้กรอก"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="ledger-lines paper-grain flex-1 rounded-sm border border-brass/30 bg-paper-dim/40 p-5 min-h-80">
         {status === "idle" && rows.length === 0 && (
@@ -96,14 +173,16 @@ export default function LedgerSheet({
                   ].join(" ")}
                 >
                   {editingId === row.id ? (
-                    <>
+                    <div
+                      className="flex items-baseline justify-between gap-3 w-full"
+                      onBlur={handleRowBlur}
+                    >
                       <input
                         autoFocus
                         value={row.label}
                         onChange={(e) =>
                           updateRow(row.id, { label: e.target.value })
                         }
-                        onBlur={() => setEditingId(null)}
                         onKeyDown={(e) =>
                           e.key === "Enter" && setEditingId(null)
                         }
@@ -117,7 +196,6 @@ export default function LedgerSheet({
                             unitPrice: e.target.value.replace(/[^\d.]/g, ""),
                           })
                         }
-                        onBlur={() => setEditingId(null)}
                         onKeyDown={(e) =>
                           e.key === "Enter" && setEditingId(null)
                         }
@@ -132,7 +210,6 @@ export default function LedgerSheet({
                             amount: e.target.value.replace(/[^\d.]/g, ""),
                           })
                         }
-                        onBlur={() => setEditingId(null)}
                         onKeyDown={(e) =>
                           e.key === "Enter" && setEditingId(null)
                         }
@@ -147,7 +224,7 @@ export default function LedgerSheet({
                       >
                         ✕
                       </button>
-                    </>
+                    </div>
                   ) : (
                     <>
                       <button
@@ -170,7 +247,7 @@ export default function LedgerSheet({
                         >
                           {row.unitPrice
                             ? `@${formatAmount(row.unitPrice)}`
-                            : ""}
+                            : "@ หน่วยละ"}
                         </button>
                       )}
                       <button
@@ -216,6 +293,35 @@ export default function LedgerSheet({
               {formatAmount(totalRow.amount)}
             </span>
           </div>
+        </div>
+      )}
+
+      {status === "done" && !showRaw && (
+        <div className="flex items-baseline gap-2 justify-end font-mono text-xs text-ink-soft/70 pt-1">
+          <span className="text-ink-soft/40">ผู้รับเงิน:</span>
+          {editingHeaderField === "payee" ? (
+            <input
+              autoFocus
+              value={payee ?? ""}
+              onChange={(e) => onPayeeChange(e.target.value || null)}
+              onBlur={() => setEditingHeaderField(null)}
+              onKeyDown={(e) =>
+                e.key === "Enter" && setEditingHeaderField(null)
+              }
+              className="bg-paper border border-rule/40 rounded-sm px-1.5 py-0.5 text-ink
+                         focus:outline-none focus:border-rule w-32"
+            />
+          ) : (
+            <button
+              onClick={() => setEditingHeaderField("payee")}
+              className={[
+                "rounded-sm px-1 -mx-1 hover:bg-rule/10 transition-colors",
+                payee ? "text-ink" : "italic text-ink-soft/40",
+              ].join(" ")}
+            >
+              {payee || "ไม่ได้กรอก"}
+            </button>
+          )}
         </div>
       )}
     </div>

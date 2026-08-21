@@ -2,7 +2,12 @@ import { useState } from "react";
 import ScannerSlot from "./components/ScannerSlot";
 import LedgerSheet from "./components/LedgerSheet";
 import { fileToBase64, stripDataUrlPrefix } from "./lib/fileToBase64";
-import type { LedgerRow, OcrResponse, ScanStatus } from "./lib/types";
+import type {
+  BillHeader,
+  LedgerRow,
+  OcrResponse,
+  ScanStatus,
+} from "./lib/types";
 import { getMediaTypeFromDataUrl } from "../lib/fileToBase64";
 
 export default function App() {
@@ -10,6 +15,8 @@ export default function App() {
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [fullText, setFullText] = useState("");
+  const [header, setHeader] = useState<BillHeader | null>(null);
+  const [payee, setPayee] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleFileSelected(file: File) {
@@ -18,6 +25,8 @@ export default function App() {
     setStatus("idle");
     setRows([]);
     setFullText("");
+    setHeader(null);
+    setPayee(null);
     setErrorMessage(null);
   }
 
@@ -26,6 +35,8 @@ export default function App() {
     setStatus("idle");
     setRows([]);
     setFullText("");
+    setHeader(null);
+    setPayee(null);
     setErrorMessage(null);
   }
 
@@ -54,6 +65,8 @@ export default function App() {
       const data: OcrResponse = await res.json();
       setFullText(data.rawText);
       setRows(data.rows);
+      setHeader(data.header ?? null);
+      setPayee(data.payee ?? null);
       setStatus("done");
     } catch (err) {
       setErrorMessage(
@@ -94,6 +107,10 @@ export default function App() {
           onRowsChange={setRows}
           fullText={fullText}
           errorMessage={errorMessage}
+          header={header}
+          payee={payee}
+          onHeaderChange={setHeader}
+          onPayeeChange={setPayee}
         />
       </main>
 
