@@ -14,6 +14,10 @@ export default function CameraCapture({
   const [facingMode, setFacingMode] = useState<"environment" | "user">(
     "environment",
   );
+
+  const [actualFacingMode, setActualFacingMode] = useState<
+    "environment" | "user"
+  >("user");
   const [capturedDataUrl, setCapturedDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(true);
@@ -45,6 +49,13 @@ export default function CameraCapture({
       }
 
       streamRef.current = stream;
+
+      const videoTrack = stream.getVideoTracks()[0];
+      const settings = videoTrack?.getSettings();
+      setActualFacingMode(
+        settings?.facingMode === "environment" ? "environment" : "user",
+      );
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         try {
@@ -172,6 +183,9 @@ export default function CameraCapture({
               ref={videoRef}
               playsInline
               muted
+              style={{
+                transform: actualFacingMode === "user" ? "scaleX(-1)" : "none",
+              }}
               className="w-full h-full object-cover"
             />
           )}
